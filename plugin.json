@@ -1,0 +1,18 @@
+{
+  "id": "djtouchette.project-board",
+  "name": "Project Board",
+  "apiVersion": "1",
+  "ui": "ui",
+  "panes": [
+    {
+      "type": "djtouchette.project-board",
+      "title": "Board",
+      "icon": "📋",
+      "scope": "agent"
+    }
+  ],
+  "capabilities": [
+    { "method": "fs.read", "paths": ["${agentCwd}"] },
+    { "method": "fs.write", "paths": ["${agentCwd}"] }
+  ]
+}

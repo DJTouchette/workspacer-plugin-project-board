@@ -1,0 +1,395 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Project Board</title>
+<style>
+  /* Chrome wears workspacer theme tokens; tag identity colors are the
+     validated dataviz categorical palette (fixed slot order, never cycled —
+     each tag keeps its first-assigned slot forever, persisted in the board). */
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    /* Categorical slots, dark-surface steps (light steps swapped in below). */
+    --cat-1: #3987e5; --cat-2: #199e70; --cat-3: #c98500; --cat-4: #008300;
+    --cat-5: #9085e9; --cat-6: #e66767; --cat-7: #d55181; --cat-8: #d95926;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--wks-bg-base, #17171a);
+    color: var(--wks-text-primary, #dcdce6);
+    font-size: 13px;
+    display: flex; flex-direction: column;
+  }
+  body[data-mode="light"] {
+    --cat-1: #2a78d6; --cat-2: #1baf7a; --cat-3: #eda100; --cat-4: #008300;
+    --cat-5: #4a3aa7; --cat-6: #e34948; --cat-7: #e87ba4; --cat-8: #eb6834;
+  }
+
+  /* ── Header ── */
+  #head { display: flex; align-items: center; gap: 10px; padding: 10px 14px 8px; flex-shrink: 0; }
+  #head h1 { font-size: 14px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+  #head .sub { font-size: 11px; color: var(--wks-text-faint, #777); }
+  #filterbar { display: flex; gap: 4px; flex-wrap: wrap; }
+  #spacer { flex: 1; }
+  #addcol {
+    font-size: 11.5px; font-family: inherit; font-weight: 600; cursor: pointer;
+    padding: 4px 12px; border-radius: 999px; border: 1px dashed var(--wks-border, #333);
+    background: transparent; color: var(--wks-text-muted, #999);
+  }
+  #addcol:hover { color: var(--wks-accent-text, #60a5fa); border-color: var(--wks-accent, #5078c8); }
+
+  /* ── Board ── */
+  #board { flex: 1; display: flex; gap: 12px; padding: 4px 14px 14px; overflow-x: auto; align-items: flex-start; }
+  .col {
+    width: 264px; flex-shrink: 0; display: flex; flex-direction: column;
+    max-height: 100%; border-radius: 13px;
+    background: var(--wks-bg-raised, #1c1c20);
+    border: 1px solid var(--wks-border-subtle, #2a2a2a);
+  }
+  .col.dragover { border-color: color-mix(in srgb, var(--wks-accent, #5078c8) 55%, transparent); }
+  .colhead { display: flex; align-items: center; gap: 7px; padding: 10px 12px 8px; }
+  .colhead input {
+    flex: 1; min-width: 0; font-size: 12px; font-weight: 650; font-family: inherit;
+    background: transparent; border: none; outline: none; color: var(--wks-text-primary, #dcdce6);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .count {
+    font-size: 10.5px; font-weight: 700; padding: 0 7px; border-radius: 999px;
+    background: var(--wks-bg-elevated, #24242a); color: var(--wks-text-muted, #999);
+    line-height: 17px; flex-shrink: 0;
+  }
+  .colx { border: none; background: transparent; color: var(--wks-text-faint, #777); cursor: pointer; font-size: 11px; padding: 0 2px; }
+  .colx:hover { color: var(--wks-error, #f87171); }
+  .cards { flex: 1; overflow-y: auto; padding: 2px 8px 4px; display: flex; flex-direction: column; gap: 7px; min-height: 24px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--wks-bg-elevated, #222228);
+    border: 1px solid var(--wks-border-subtle, #2a2a2a);
+    border-radius: 9px; padding: 9px 10px; cursor: grab; position: relative;
+    transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s;
+  }
+  .card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.28); border-color: var(--wks-border, #333); }
+  .card.dragging { opacity: 0.45; transform: scale(0.98); cursor: grabbing; }
+  .card .t { font-size: 12.5px; font-weight: 600; line-height: 1.35; word-break: break-word; }
+  .card .d { font-size: 11px; color: var(--wks-text-muted, #999); margin-top: 4px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+  .card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+    border: 1px solid var(--wks-border-subtle, #2a2a2a); color: var(--wks-text-secondary, #bbb);
+    cursor: pointer; user-select: none; background: transparent;
+  }
+  .tag .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .tag.on { border-color: var(--wks-accent, #5078c8); background: color-mix(in srgb, var(--wks-accent, #5078c8) 12%, transparent); }
+  .cardx { position: absolute; top: 6px; right: 7px; border: none; background: transparent; color: transparent; cursor: pointer; font-size: 11px; padding: 1px 3px; }
+  .card:hover .cardx { color: var(--wks-text-faint, #777); }
+  .cardx:hover { color: var(--wks-error, #f87171) !important; }
+
+  /* Drop indicator between cards */
+  .drop-ind { height: 3px; border-radius: 2px; background: var(--wks-accent, #5078c8); margin: -2px 2px; flex-shrink: 0; box-shadow: 0 0 8px color-mix(in srgb, var(--wks-accent, #5078c8) 60%, transparent); }
+
+  /* ── Add card ── */
+  .addcard {
+    margin: 0 8px 10px; padding: 6px 10px; font-size: 11.5px; font-family: inherit;
+    border: 1px dashed var(--wks-border-subtle, #2a2a2a); border-radius: 8px;
+    background: transparent; color: var(--wks-text-faint, #777); cursor: pointer; text-align: left;
+  }
+  .addcard:hover { color: var(--wks-accent-text, #60a5fa); border-color: var(--wks-accent, #5078c8); }
+  .composer { margin: 0 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .composer textarea, .composer input {
+    width: 100%; font-family: inherit; font-size: 12px; padding: 7px 9px;
+    background: var(--wks-bg-input, #141418); color: inherit; outline: none;
+    border: 1px solid var(--wks-accent, #5078c8); border-radius: 8px; resize: none;
+  }
+  .composer input { border-color: var(--wks-border-subtle, #2a2a2a); font-size: 11px; font-family: ui-monospace, monospace; }
+  .composer .hint { font-size: 10px; color: var(--wks-text-faint, #777); }
+
+  #status { font-size: 10.5px; color: var(--wks-text-faint, #777); }
+  .empty { margin: auto; text-align: center; color: var(--wks-text-faint, #777); font-size: 12.5px; padding: 40px; }
+</style>
+</head>
+<body>
+  <div id="head">
+    <h1 id="proj">Board</h1>
+    <span class="sub" id="sub"></span>
+    <div id="filterbar"></div>
+    <span id="spacer"></span>
+    <span id="status"></span>
+    <button id="addcol">＋ Column</button>
+  </div>
+  <div id="board"></div>
+
+<script>
+(() => {
+  'use strict';
+  // ── Hub bus boilerplate ──
+  const params = new URLSearchParams(location.search);
+  const token = params.get('busToken') || '';
+  const cwd = (params.get('cwd') || '').replace(/[/\\]+$/, '');
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/bus?token=${encodeURIComponent(token)}`);
+  let seq = 1;
+  const pending = new Map();
+  function call(method, p = {}) {
+    return new Promise((resolve, reject) => {
+      const id = 'c' + seq++;
+      pending.set(id, { resolve, reject });
+      ws.send(JSON.stringify({ op: 'call', id, method, params: p }));
+    });
+  }
+  ws.onmessage = (ev) => {
+    let f; try { f = JSON.parse(ev.data); } catch { return; }
+    const c = f.id && pending.get(f.id);
+    if (!c) return;
+    pending.delete(f.id);
+    if (f.op === 'result') c.resolve(f.result);
+    else c.reject(new Error(f.error || 'error'));
+  };
+
+  const bgc = getComputedStyle(document.body).backgroundColor.match(/\d+/g) || [23, 23, 26];
+  const lum = (0.2126 * bgc[0] + 0.7152 * bgc[1] + 0.0722 * bgc[2]) / 255;
+  document.body.dataset.mode = lum > 0.5 ? 'light' : 'dark';
+
+  // ── Board state (one JSON file per project) ──
+  const FILE = cwd + '/.workspacer/plugins/project-board/board.json';
+  const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const now = () => new Date().toISOString();
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  let board = null;      // { version, columns:[{id,title,cardIds}], cards:{}, tagSlots:{} }
+  let tagFilter = null;
+  let composing = null;  // column id with the inline composer open
+  let drag = null;       // { cardId, fromCol }
+
+  function blank() {
+    return {
+      version: 1,
+      columns: [
+        { id: uid(), title: 'Backlog', cardIds: [] },
+        { id: uid(), title: 'In Progress', cardIds: [] },
+        { id: uid(), title: 'Done', cardIds: [] },
+      ],
+      cards: {},
+      tagSlots: {},
+    };
+  }
+
+  async function load() {
+    try {
+      const res = await call('fs.read', { path: FILE });
+      const doc = JSON.parse((res && res.contents) || '{}');
+      board = doc && Array.isArray(doc.columns) ? doc : blank();
+      if (!board.tagSlots) board.tagSlots = {};
+    } catch { board = blank(); }
+  }
+  let saveTimer = null;
+  function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(flush, 500); }
+  function flush() {
+    clearTimeout(saveTimer); saveTimer = null;
+    call('fs.write', { path: FILE, contents: JSON.stringify(board, null, 2) + '\n' })
+      .then(() => setStatus('saved'))
+      .catch((e) => setStatus('save failed: ' + e.message));
+  }
+  window.addEventListener('blur', () => { if (saveTimer) flush(); });
+
+  // Fixed-order slot assignment: a tag gets the next free categorical slot the
+  // first time it appears and keeps it forever (identity never repaints).
+  function slotFor(tag) {
+    if (!(tag in board.tagSlots)) {
+      const used = Object.values(board.tagSlots);
+      let s = 0;
+      while (used.includes(s % 8) && s < 8) s++;
+      board.tagSlots[tag] = s % 8;
+    }
+    return (board.tagSlots[tag] % 8) + 1;
+  }
+
+  const $ = (id) => document.getElementById(id);
+  function setStatus(t) {
+    $('status').textContent = t;
+    setTimeout(() => { if ($('status').textContent === t) $('status').textContent = ''; }, 1500);
+  }
+
+  function allTags() {
+    return [...new Set(Object.values(board.cards).flatMap((c) => c.tags))].sort();
+  }
+
+  // ── Render ──
+  function render() {
+    $('proj').textContent = cwd ? cwd.split(/[/\\]/).pop() : 'Board';
+    const total = Object.keys(board.cards).length;
+    $('sub').textContent = total ? `${total} card${total === 1 ? '' : 's'}` : '';
+    $('filterbar').innerHTML = allTags().map((t) =>
+      `<span class="tag${t === tagFilter ? ' on' : ''}" data-tag="${esc(t)}"><span class="dot" style="background:var(--cat-${slotFor(t)})"></span>${esc(t)}</span>`).join('');
+    for (const el of $('filterbar').querySelectorAll('.tag')) {
+      el.onclick = () => { tagFilter = tagFilter === el.dataset.tag ? null : el.dataset.tag; render(); };
+    }
+
+    const b = $('board');
+    b.innerHTML = '';
+    for (const col of board.columns) b.appendChild(renderCol(col));
+    if (board.columns.length === 0) {
+      b.innerHTML = '<div class="empty">No columns — add one to get started.</div>';
+    }
+  }
+
+  function renderCol(col) {
+    const el = document.createElement('div');
+    el.className = 'col';
+    const visible = col.cardIds
+      .map((id) => board.cards[id])
+      .filter(Boolean)
+      .filter((c) => !tagFilter || c.tags.includes(tagFilter));
+    el.innerHTML = `
+      <div class="colhead">
+        <input value="${esc(col.title)}" spellcheck="false" />
+        <span class="count">${visible.length}</span>
+        <button class="colx" title="Delete column">✕</button>
+      </div>
+      <div class="cards" data-col="${col.id}"></div>
+      ${composing === col.id ? '' : `<button class="addcard">＋ Add card</button>`}`;
+    const title = el.querySelector('.colhead input');
+    title.onchange = () => { col.title = title.value.trim() || 'Untitled'; persist(); };
+    el.querySelector('.colx').onclick = () => {
+      if (col.cardIds.length && !confirm(`Delete "${col.title}" and its ${col.cardIds.length} card(s)?`)) return;
+      for (const id of col.cardIds) delete board.cards[id];
+      board.columns = board.columns.filter((c) => c.id !== col.id);
+      persist(); render();
+    };
+
+    const cardsEl = el.querySelector('.cards');
+    for (const card of visible) cardsEl.appendChild(renderCard(card, col));
+    if (composing === col.id) cardsEl.after(renderComposer(col));
+    else el.querySelector('.addcard').onclick = () => { composing = col.id; render(); focusComposer(); };
+
+    // Column-level drag & drop with a live between-cards indicator.
+    cardsEl.addEventListener('dragover', (e) => {
+      if (!drag) return;
+      e.preventDefault();
+      el.classList.add('dragover');
+      positionIndicator(cardsEl, e.clientY);
+    });
+    cardsEl.addEventListener('dragleave', (e) => {
+      if (!cardsEl.contains(e.relatedTarget)) { el.classList.remove('dragover'); clearIndicator(); }
+    });
+    cardsEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('dragover');
+      if (!drag) return;
+      const before = indicatorTargetId(cardsEl);
+      clearIndicator();
+      moveCard(drag.cardId, drag.fromCol, col.id, before);
+      drag = null;
+    });
+    return el;
+  }
+
+  function renderCard(card, col) {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.draggable = true;
+    el.dataset.id = card.id;
+    el.innerHTML = `
+      <div class="t">${esc(card.title)}</div>
+      ${card.desc ? `<div class="d">${esc(card.desc)}</div>` : ''}
+      ${card.tags.length ? `<div class="tags">${card.tags.map((t) =>
+        `<span class="tag" data-tag="${esc(t)}"><span class="dot" style="background:var(--cat-${slotFor(t)})"></span>${esc(t)}</span>`).join('')}</div>` : ''}
+      <button class="cardx" title="Delete card">✕</button>`;
+    el.addEventListener('dragstart', (e) => {
+      drag = { cardId: card.id, fromCol: col.id };
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', card.id);
+    });
+    el.addEventListener('dragend', () => { el.classList.remove('dragging'); clearIndicator(); drag = null; });
+    el.querySelector('.cardx').onclick = (e) => {
+      e.stopPropagation();
+      col.cardIds = col.cardIds.filter((id) => id !== card.id);
+      delete board.cards[card.id];
+      persist(); render();
+    };
+    for (const t of el.querySelectorAll('.tag')) {
+      t.onclick = (e) => { e.stopPropagation(); tagFilter = tagFilter === t.dataset.tag ? null : t.dataset.tag; render(); };
+    }
+    // Double-click edits in place (title + notes + tags through the composer).
+    el.ondblclick = () => { composing = { edit: card.id, col: col.id }; render(); focusComposer(); };
+    return el;
+  }
+
+  function renderComposer(col) {
+    const editing = composing && composing.edit ? board.cards[composing.edit] : null;
+    const wrap = document.createElement('div');
+    wrap.className = 'composer';
+    wrap.innerHTML = `
+      <textarea rows="2" placeholder="Card title — first line; notes below…">${editing ? esc(editing.title + (editing.desc ? '\n' + editing.desc : '')) : ''}</textarea>
+      <input placeholder="tags, comma, separated" value="${editing ? esc(editing.tags.join(', ')) : ''}" />
+      <span class="hint">Enter to save · Shift+Enter for notes · Esc to cancel</span>`;
+    const ta = wrap.querySelector('textarea');
+    const tagsIn = wrap.querySelector('input');
+    const commit = () => {
+      const text = ta.value.trim();
+      if (!text) { composing = null; render(); return; }
+      const [title, ...rest] = text.split('\n');
+      const tags = tagsIn.value.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+      if (editing) {
+        Object.assign(editing, { title, desc: rest.join('\n').trim(), tags, updatedAt: now() });
+      } else {
+        const card = { id: uid(), title, desc: rest.join('\n').trim(), tags, createdAt: now(), updatedAt: now() };
+        board.cards[card.id] = card;
+        col.cardIds.push(card.id);
+      }
+      for (const t of tags) slotFor(t);
+      composing = null;
+      persist(); render();
+    };
+    ta.onkeydown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { composing = null; render(); }
+    };
+    tagsIn.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { composing = null; render(); }
+    };
+    return wrap;
+  }
+  function focusComposer() { requestAnimationFrame(() => document.querySelector('.composer textarea')?.focus()); }
+
+  // ── Drag indicator helpers ──
+  function positionIndicator(cardsEl, y) {
+    clearIndicator();
+    const ind = document.createElement('div');
+    ind.className = 'drop-ind';
+    const cards = [...cardsEl.querySelectorAll('.card:not(.dragging)')];
+    const after = cards.find((c) => y < c.getBoundingClientRect().top + c.offsetHeight / 2);
+    if (after) cardsEl.insertBefore(ind, after);
+    else cardsEl.appendChild(ind);
+  }
+  function clearIndicator() { document.querySelectorAll('.drop-ind').forEach((n) => n.remove()); }
+  function indicatorTargetId(cardsEl) {
+    const ind = cardsEl.querySelector('.drop-ind');
+    const next = ind && ind.nextElementSibling;
+    return next && next.classList.contains('card') ? next.dataset.id : null;
+  }
+
+  function moveCard(cardId, fromColId, toColId, beforeId) {
+    const from = board.columns.find((c) => c.id === fromColId);
+    const to = board.columns.find((c) => c.id === toColId);
+    if (!from || !to) return;
+    from.cardIds = from.cardIds.filter((id) => id !== cardId);
+    const idx = beforeId ? to.cardIds.indexOf(beforeId) : -1;
+    if (idx >= 0) to.cardIds.splice(idx, 0, cardId);
+    else to.cardIds.push(cardId);
+    persist(); render();
+  }
+
+  $('addcol').onclick = () => {
+    board.columns.push({ id: uid(), title: 'New column', cardIds: [] });
+    persist(); render();
+  };
+
+  ws.onopen = async () => { await load(); render(); };
+  ws.onclose = () => setStatus('bus disconnected');
+})();
+</script>
+</body>
+</html>
