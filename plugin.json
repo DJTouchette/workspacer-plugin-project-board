@@ -2,6 +2,7 @@
   "id": "djtouchette.project-board",
   "name": "Project Board",
   "apiVersion": "1",
+  "version": "1.0.0",
   "ui": "ui",
   "panes": [
     {
